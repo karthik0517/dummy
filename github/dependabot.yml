@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+  - package-ecosystem: terraform
+    directory: /dev
+    schedule:
+      interval: weekly
+    groups:
+      terraform-dev:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+  - package-ecosystem: terraform
+    directory: /shared
+    schedule:
+      interval: weekly
+    groups:
+      terraform-shared:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5

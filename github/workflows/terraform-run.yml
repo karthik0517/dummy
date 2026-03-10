@@ -1,0 +1,144 @@
+name: Terraform Run
+
+on:
+  workflow_call:
+    inputs:
+      directory:
+        required: true
+        type: string
+    secrets:
+      ARM_CLIENT_ID:
+        required: true
+      ARM_SUBSCRIPTION_ID:
+        required: true
+      ARM_TENANT_ID:
+        required: true
+
+permissions: {}
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: terraform-${{ github.ref }}-${{ inputs.directory }}
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.directory }}
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_USE_OIDC: "true"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85
+        with:
+          terraform_wrapper: false
+
+      - name: Azure Login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        if: github.event_name == 'pull_request'
+        run: |
+          set +e
+          set -o pipefail
+          terraform plan -no-color -input=false -detailed-exitcode -lock-timeout=5m -compact-warnings 2>&1 | tee plan_output.txt
+          exitcode=${PIPESTATUS[0]}
+          echo "exitcode=$exitcode" >> "$GITHUB_OUTPUT"
+          if [ "$exitcode" -eq 1 ]; then
+            exit 1
+          fi
+
+      - name: Upload plan output
+        if: github.event_name == 'pull_request' && always() && steps.plan.outcome == 'success'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: plan-${{ inputs.directory }}
+          path: ${{ inputs.directory }}/plan_output.txt
+          retention-days: 90
+          overwrite: true
+
+      - name: Post plan to PR
+        if: github.event_name == 'pull_request' && always() && steps.plan.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIRECTORY: ${{ inputs.directory }}
+          PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          pr_number="$PR_NUMBER"
+          if [ -z "$pr_number" ]; then
+            echo "No PR number found, skipping comment"
+            exit 0
+          fi
+
+          marker="<!-- terraform-plan:${DIRECTORY} -->"
+
+          if [ "$PLAN_EXIT" = "0" ]; then
+            status="No changes"
+          elif [ "$PLAN_EXIT" = "2" ]; then
+            status="Changes detected"
+          else
+            status="Error"
+          fi
+
+          plan_text=$(cat plan_output.txt)
+          max_len=64000
+          if [ "${#plan_text}" -gt "$max_len" ]; then
+            truncated_note="... (truncated, see full output in workflow run)"
+            half=$(( (max_len - ${#truncated_note}) / 2 ))
+            head_part=$(echo "$plan_text" | head -c "$half")
+            tail_part=$(echo "$plan_text" | tail -c "$half")
+            plan_text="${head_part}
+          ${truncated_note}
+          ${tail_part}"
+          fi
+
+          body="${marker}
+          ### Terraform Plan: \`${DIRECTORY}\` — ${status}
+
+          \`\`\`
+          ${plan_text}
+          \`\`\`
+
+          *Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}*"
+
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${pr_number}/comments" --paginate --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -1)
+
+          if [ -n "$existing" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -X PATCH -f body="$body"
+          else
+            gh pr comment "$pr_number" --body "$body"
+          fi
+
+      - name: Fail on plan error
+        if: github.event_name == 'pull_request' && steps.plan.outputs.exitcode == '1'
+        run: exit 1
+
+      - name: Terraform Apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: terraform plan -out=tfplan -input=false -lock-timeout=5m && terraform apply -input=false tfplan

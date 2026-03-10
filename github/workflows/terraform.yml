@@ -1,0 +1,218 @@
+name: Terraform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "shared/**"
+      - "dev/**"
+      - "prod/**"
+      - "stage/**"
+      - "test/**"
+      - "modules/**"
+      - ".github/workflows/terraform.yml"
+      - ".github/workflows/terraform-run.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "shared/**"
+      - "dev/**"
+      - "prod/**"
+      - "stage/**"
+      - "test/**"
+      - "modules/**"
+      - ".github/workflows/terraform.yml"
+      - ".github/workflows/terraform-run.yml"
+  workflow_dispatch:
+    inputs:
+      directory:
+        description: "Directory to run Terraform in"
+        required: true
+        type: choice
+        options:
+          - shared
+          - dev
+          - test
+          - stage
+          - prod
+
+permissions: {}
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      shared: ${{ steps.dirs.outputs.shared }}
+      dev: ${{ steps.dirs.outputs.dev }}
+      test: ${{ steps.dirs.outputs.test }}
+      stage: ${{ steps.dirs.outputs.stage }}
+      prod: ${{ steps.dirs.outputs.prod }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Detect changed files
+        if: github.event_name != 'workflow_dispatch'
+        id: changed
+        uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323
+        with:
+          files_yaml: |
+            shared:
+              - shared/**
+            dev:
+              - dev/**
+            test:
+              - test/**
+            stage:
+              - stage/**
+            prod:
+              - prod/**
+            modules:
+              - modules/**
+
+      - name: Determine which directories need runs
+        id: dirs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_DIR: ${{ inputs.directory }}
+          SHARED_CHANGED: ${{ steps.changed.outputs.shared_any_changed }}
+          DEV_CHANGED: ${{ steps.changed.outputs.dev_any_changed }}
+          TEST_CHANGED: ${{ steps.changed.outputs.test_any_changed }}
+          STAGE_CHANGED: ${{ steps.changed.outputs.stage_any_changed }}
+          PROD_CHANGED: ${{ steps.changed.outputs.prod_any_changed }}
+          MODULES_CHANGED: ${{ steps.changed.outputs.modules_any_changed }}
+          MODULES_FILES: ${{ steps.changed.outputs.modules_all_changed_files }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            for dir in shared dev test stage prod; do
+              if [ "$dir" = "$DISPATCH_DIR" ]; then
+                echo "$dir=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "$dir=false" >> "$GITHUB_OUTPUT"
+              fi
+            done
+            exit 0
+          fi
+
+          has_tf_root() {
+            [ -d "$1" ] && compgen -G "$1/*.tf" > /dev/null
+          }
+
+          changed_modules=""
+          if [ "$MODULES_CHANGED" = "true" ]; then
+            changed_modules=$(echo "$MODULES_FILES" | tr ' ' '\n' | sed 's|^modules/||' | cut -d/ -f1 | sort -u)
+          fi
+
+          env_uses_changed_module() {
+            local dir="$1"
+            if [ -z "$changed_modules" ]; then
+              return 1
+            fi
+            for mod in $changed_modules; do
+              if grep -rlq "modules/$mod" "$dir"/*.tf 2>/dev/null; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          for dir in shared dev test stage prod; do
+            var_name=$(echo "${dir}_CHANGED" | tr '[:lower:]' '[:upper:]')
+            changed=$(eval echo "\$$var_name")
+            if has_tf_root "$dir" && { [ "$changed" = "true" ] || env_uses_changed_module "$dir"; }; then
+              echo "$dir=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$dir=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+  shared:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.shared == 'true'
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/terraform-run.yml
+    with:
+      directory: shared
+    secrets:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+  dev:
+    needs: [detect-changes, shared]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.dev == 'true' &&
+      (needs.shared.result == 'success' || needs.shared.result == 'skipped')
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/terraform-run.yml
+    with:
+      directory: dev
+    secrets:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+  test:
+    needs: [detect-changes, dev]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.test == 'true' &&
+      (needs.dev.result == 'success' || needs.dev.result == 'skipped')
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/terraform-run.yml
+    with:
+      directory: test
+    secrets:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+  stage:
+    needs: [detect-changes, test]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.stage == 'true' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/terraform-run.yml
+    with:
+      directory: stage
+    secrets:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+  prod:
+    needs: [detect-changes, stage]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.prod == 'true' &&
+      (needs.stage.result == 'success' || needs.stage.result == 'skipped')
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/terraform-run.yml
+    with:
+      directory: prod
+    secrets:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
