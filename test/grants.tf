@@ -180,12 +180,6 @@ resource "databricks_grants" "external_location_bronze_jde_ogg" {
     ]
   }
   grant {
-    principal = module.role_group["svc"].display_name
-    privileges = [
-      "ALL_PRIVILEGES",
-    ]
-  }
-  grant {
     principal = local.ogg_service_principal_app_id
     privileges = [
       "READ_FILES",

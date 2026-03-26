@@ -42,3 +42,26 @@ variable "service_endpoint_policy_ids" {
   type    = list(string)
   default = []
 }
+
+variable "delegations" {
+  type = list(object({
+    name = string
+    service_delegation = object({
+      name    = string
+      actions = list(string)
+    })
+  }))
+  default = [
+    {
+      name = "databricks-delegation"
+      service_delegation = {
+        name = "Microsoft.Databricks/workspaces"
+        actions = [
+          "Microsoft.Network/virtualNetworks/subnets/join/action",
+          "Microsoft.Network/virtualNetworks/subnets/prepareNetworkPolicies/action",
+          "Microsoft.Network/virtualNetworks/subnets/unprepareNetworkPolicies/action",
+        ]
+      }
+    }
+  ]
+}

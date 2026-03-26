@@ -2,20 +2,16 @@ variable "schemas" {
   description = "Schemas with dedicated ADLS storage containers and external locations."
   type        = list(string)
 
-  # At least one storage-backed schema is always required.
   validation {
     condition     = length(var.schemas) > 0
     error_message = "schemas must contain at least one entry."
   }
 
-  # Reject duplicate entries — list(string) preserves duplicates so we can detect them.
   validation {
     condition     = length(var.schemas) == length(distinct(var.schemas))
     error_message = "schemas must not contain duplicate entries."
   }
 
-  # Enforce lowercase_with_underscores naming convention (e.g. bronze_jde, silver_common).
-  # Each segment must start with a letter; at least one underscore is required.
   validation {
     condition     = alltrue([for s in var.schemas : can(regex("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)+$", s))])
     error_message = "Each schema name must be lowercase alphanumeric with at least one underscore (e.g. bronze_jde)."
@@ -41,7 +37,6 @@ variable "managed_schemas" {
   type        = set(string)
   default     = []
 
-  # Same naming convention as schemas — lowercase_with_underscores.
   validation {
     condition     = alltrue([for s in var.managed_schemas : can(regex("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)+$", s))])
     error_message = "Each managed schema name must be lowercase alphanumeric with at least one underscore (e.g. silver_common)."

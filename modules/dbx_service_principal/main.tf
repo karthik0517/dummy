@@ -7,25 +7,26 @@ terraform {
   }
 }
 
-resource "databricks_group" "this" {
-  provider     = databricks.account
-  display_name = var.display_name
-  external_id  = var.external_id
+resource "databricks_service_principal" "this" {
+  provider                   = databricks.account
+  display_name               = var.display_name
+  active                     = true
+  allow_cluster_create       = var.allow_cluster_create
+  allow_instance_pool_create = var.allow_instance_pool_create
+  databricks_sql_access      = var.databricks_sql_access
+  workspace_access           = var.workspace_access
 }
 
 resource "databricks_mws_permission_assignment" "this" {
   provider     = databricks.account
   workspace_id = var.workspace_id
-  principal_id = databricks_group.this.id
+  principal_id = databricks_service_principal.this.id
   permissions  = [var.permission_level]
 }
 
-# Workspace entitlements must be assigned via databricks_entitlements for
-# account-level groups — setting them directly on databricks_group only
-# works for workspace-local groups.
 resource "databricks_entitlements" "this" {
   provider                   = databricks.workspace
-  group_id                   = databricks_group.this.id
+  service_principal_id       = databricks_service_principal.this.id
   depends_on                 = [databricks_mws_permission_assignment.this]
   workspace_access           = var.workspace_access
   databricks_sql_access      = var.databricks_sql_access

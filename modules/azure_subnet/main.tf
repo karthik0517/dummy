@@ -10,16 +10,22 @@ resource "azurerm_subnet" "this" {
   service_endpoints                             = var.service_endpoints
   service_endpoint_policy_ids                   = var.service_endpoint_policy_ids
 
-  delegation {
-    name = "databricks-delegation"
-    service_delegation {
-      name = "Microsoft.Databricks/workspaces"
-      actions = [
-        "Microsoft.Network/virtualNetworks/subnets/join/action",
-        "Microsoft.Network/virtualNetworks/subnets/prepareNetworkPolicies/action",
-        "Microsoft.Network/virtualNetworks/subnets/unprepareNetworkPolicies/action",
-      ]
+  dynamic "delegation" {
+    for_each = var.delegations
+    content {
+      name = delegation.value.name
+      service_delegation {
+        name    = delegation.value.service_delegation.name
+        actions = delegation.value.service_delegation.actions
+      }
     }
+  }
+
+  # Databricks VNet injection can reorder or modify delegation actions after
+  # deployment, causing plan drift.
+  # https://github.com/hashicorp/terraform-provider-azurerm/issues/19521
+  lifecycle {
+    ignore_changes = [delegation]
   }
 }
 

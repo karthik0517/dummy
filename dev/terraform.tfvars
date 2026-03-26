@@ -1,5 +1,7 @@
 schemas = [
-  "audit_common",
+  "ops_observability",
+  "ops_governance",
+  "ops_recovery",
   "bronze_bidtracer",
   "bronze_boomi_process_reporting",
   "bronze_fabpro",
@@ -39,22 +41,17 @@ schemas = [
 
 managed_schemas = []
 
-volumes = {
-  copper_profitool_accountpayable_files       = { schema = "copper_profitool", type = "MANAGED" }
-  copper_profitool_vendor_client_files        = { schema = "copper_profitool", type = "MANAGED" }
-  copper_profitool_accountreceivable_files    = { schema = "copper_profitool", type = "MANAGED" }
-  copper_inspection_service_raw_videos        = { schema = "copper_inspection_service", type = "MANAGED" }
-  copper_inspection_service_training          = { schema = "copper_inspection_service", type = "MANAGED" }
-  copper_inspection_service_raw_audio         = { schema = "copper_inspection_service", type = "MANAGED" }
-  copper_bidtracer_dist                       = { schema = "copper_bidtracer", type = "MANAGED" }
-  gold_inspection_service_reports             = { schema = "gold_inspection_service", type = "MANAGED" }
-  silver_inspection_service_issue_screenshots = { schema = "silver_inspection_service", type = "MANAGED" }
-  silver_inspection_service_extracted_frames  = { schema = "silver_inspection_service", type = "MANAGED" }
-  bronze_shared_dist                          = { schema = "bronze_shared", type = "MANAGED" }
-  bronze_test_landing = {
-    schema       = "bronze_test"
-    type         = "EXTERNAL"
-    storage_path = "landing"
-    comment      = "Landing volume for bronze layer data ingestion - dev"
+service_principals = {
+  bidtracer = {
+    bronze_bidtracer          = ["CREATE_MATERIALIZED_VIEW", "CREATE_TABLE", "READ_VOLUME", "SELECT", "USE_SCHEMA"]
+    silver_bidtracer          = ["CREATE_MATERIALIZED_VIEW", "CREATE_TABLE", "MODIFY", "READ_VOLUME", "SELECT", "USE_SCHEMA"]
+    copper_bidtracer          = ["CREATE_TABLE", "READ_VOLUME", "SELECT", "USE_SCHEMA"]
+    copper_inspection_service = ["CREATE_TABLE", "MODIFY", "READ_VOLUME", "SELECT", "USE_SCHEMA"]
+  }
+  inspection_service = {
+    bronze_inspection_service = ["CREATE_MATERIALIZED_VIEW", "CREATE_TABLE", "CREATE_VOLUME", "READ_VOLUME", "SELECT", "USE_SCHEMA", "WRITE_VOLUME"]
+    copper_inspection_service = ["CREATE_TABLE", "CREATE_VOLUME", "READ_VOLUME", "SELECT", "USE_SCHEMA", "WRITE_VOLUME"]
+    gold_inspection_service   = ["CREATE_TABLE", "CREATE_VOLUME", "READ_VOLUME", "SELECT", "USE_SCHEMA", "WRITE_VOLUME"]
+    silver_inspection_service = ["CREATE_TABLE", "CREATE_VOLUME", "READ_VOLUME", "SELECT", "USE_SCHEMA", "WRITE_VOLUME"]
   }
 }

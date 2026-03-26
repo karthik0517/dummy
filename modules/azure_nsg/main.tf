@@ -21,4 +21,11 @@ resource "azurerm_network_security_group" "this" {
       destination_address_prefixes = security_rule.value.destination_address_prefixes
     }
   }
+
+  # Databricks VNet injection auto-injects NSG rules for worker-to-worker,
+  # control plane, and EventHub communication via Network Intent Policy.
+  # https://learn.microsoft.com/en-us/azure/databricks/security/network/classic/vnet-inject
+  lifecycle {
+    ignore_changes = [security_rule]
+  }
 }

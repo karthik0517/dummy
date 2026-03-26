@@ -50,7 +50,29 @@ module "dev_databricks_workspace" {
   public_subnet_name            = data.terraform_remote_state.shared.outputs.subnet_public_dev_new_name
   private_nsg_association_id    = data.terraform_remote_state.shared.outputs.subnet_private_dev_new_nsg_association_id
   public_nsg_association_id     = data.terraform_remote_state.shared.outputs.subnet_public_dev_new_nsg_association_id
-  tags                          = local.tags
+  enhanced_security_compliance = {
+    automatic_cluster_update_enabled = true
+  }
+  tags = local.tags
+}
+
+resource "databricks_automatic_cluster_update_workspace_setting" "this" {
+  provider = databricks.workspace
+
+  automatic_cluster_update_workspace {
+    enabled    = true
+    can_toggle = true
+    maintenance_window {
+      week_day_based_schedule {
+        day_of_week = "SATURDAY"
+        frequency   = "FIRST_OF_MONTH"
+        window_start_time {
+          hours   = 8
+          minutes = 0
+        }
+      }
+    }
+  }
 }
 
 resource "azurerm_role_assignment" "access_connector_blob_contributor" {

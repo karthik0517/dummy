@@ -45,6 +45,7 @@ resource "databricks_external_location" "this" {
   name            = "${local.environment}-${local.container_name[each.key]}"
   url             = local.container_url[each.key]
   credential_name = module.storage_credential.name
+  force_destroy   = true
 }
 
 # OGG writes raw replication data to a subfolder within the bronze-jde container.

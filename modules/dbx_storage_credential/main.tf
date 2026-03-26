@@ -14,4 +14,5 @@ resource "databricks_storage_credential" "this" {
     access_connector_id = var.access_connector_id
   }
   force_destroy = var.force_destroy
+  force_update  = var.force_update
 }

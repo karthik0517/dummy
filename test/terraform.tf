@@ -2,7 +2,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "= 4.61.0"
+      version = "4.64.0"
     }
     azuread = {
       source  = "hashicorp/azuread"
@@ -10,7 +10,7 @@ terraform {
     }
     databricks = {
       source  = "databricks/databricks"
-      version = "= 1.109.0"
+      version = "1.112.0"
     }
   }
 
@@ -29,14 +29,18 @@ provider "azurerm" {
   features {}
 }
 
-# provider "databricks" {
-#   alias      = "account"
-#   host       = "https://accounts.azuredatabricks.net"
-#   account_id = local.databricks_account_id
-# }
+provider "azuread" {
+  tenant_id = local.tenant_id
+}
 
-# provider "databricks" {
-#   alias                       = "workspace"
-#   host                        = module.workspace.workspace_url
-#   azure_workspace_resource_id = module.workspace.workspace_resource_id
-# }
+provider "databricks" {
+  alias      = "account"
+  host       = "https://accounts.azuredatabricks.net"
+  account_id = data.terraform_remote_state.shared.outputs.databricks_account_id
+}
+
+provider "databricks" {
+  alias                       = "workspace"
+  host                        = module.test_databricks_workspace.workspace_url
+  azure_workspace_resource_id = module.test_databricks_workspace.workspace_resource_id
+}
