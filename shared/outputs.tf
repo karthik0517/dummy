@@ -57,3 +57,39 @@ output "subnet_private_test_nsg_association_id" {
 output "subnet_public_test_nsg_association_id" {
   value = module.subnet_public_test.nsg_association_id
 }
+
+output "vnet_prod_id" {
+  value = module.vnet_prod.id
+}
+
+output "subnet_private_stage_name" {
+  value = module.subnet_private_stage.name
+}
+
+output "subnet_public_stage_name" {
+  value = module.subnet_public_stage.name
+}
+
+output "subnet_private_stage_nsg_association_id" {
+  value = module.subnet_private_stage.nsg_association_id
+}
+
+output "subnet_public_stage_nsg_association_id" {
+  value = module.subnet_public_stage.nsg_association_id
+}
+
+output "subnet_private_prod_name" {
+  value = module.subnet_private_prod.name
+}
+
+output "subnet_public_prod_name" {
+  value = module.subnet_public_prod.name
+}
+
+output "subnet_private_prod_nsg_association_id" {
+  value = module.subnet_private_prod.nsg_association_id
+}
+
+output "subnet_public_prod_nsg_association_id" {
+  value = module.subnet_public_prod.nsg_association_id
+}
